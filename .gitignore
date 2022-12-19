@@ -1,0 +1,6 @@
+# JetBrains IDE
+.idea/
+
+# DB and Results dir
+db/
+results/
