@@ -11,6 +11,8 @@ import (
 
 	bolt "go.etcd.io/bbolt"
 	"golang.org/x/exp/maps"
+
+	"github.com/r3labs/diff/v3"
 )
 
 type Details struct {
@@ -37,12 +39,14 @@ type CVE struct {
 func main() {
 
 	var db1Path, db2Path string
-	fmt.Println("Enter the path of DB1; DB2")
-	fmt.Scanf("%s %s", &db1Path, &db2Path)
-
-	if db1Path == "" || db2Path == "" {
-		fmt.Println("Enter valid DB paths")
-	}
+	//fmt.Println("Enter the path of DB1; DB2")
+	//fmt.Scan(&db1Path, &db2Path)
+	//
+	//if db1Path == "" || db2Path == "" {
+	//	fmt.Println("Enter valid DB paths")
+	//}
+	db1Path = "/home/moni/workspace/github.com/boltdbcomparator/db/trivy_fpd_30dec.db"
+	db2Path = "/home/moni/workspace/github.com/boltdbcomparator/db/trivy_2Jan.db"
 	db1, err := bolt.Open(db1Path, 0666, nil)
 	if err != nil {
 		log.Fatal(err)
@@ -107,7 +111,7 @@ func main() {
 
 func compareDetails(mapA, mapB DetailsMap) {
 
-	finalComparison := make(map[string]PackageDetailsMap)
+	finalComparison := make(map[string]diff.Changelog)
 	for platformA, pkgDetailsListA := range mapA {
 		pkgDetailsListB := mapB[platformA]
 		//if len(pkgDetailsListA) != len(pkgDetailsListB) {
@@ -124,15 +128,21 @@ func compareDetails(mapA, mapB DetailsMap) {
 				continue
 			}
 			if pkgDetailsListB[key] == nil {
-				fmt.Println("No value in DB2 for " + platformA + " " + key + " But value in DB1 is " + valA.(string))
+				fmt.Printf("No value in DB2 for %s key. But value in DB1 is %v", platformA, valA)
 				continue
 			}
 			//extraA, extraB := diffLists(valA, pkgDetailsListB[key])
-			if valA != pkgDetailsListB[key] || !reflect.DeepEqual(valA, pkgDetailsListB[key]) {
+			changelog, err := diff.Diff(valA, pkgDetailsListB[key])
+			if err != nil {
+				fmt.Printf("Error %v trying to find diff for %v, %v", err, valA, pkgDetailsListB[key])
+				continue
+			}
+			// if valA != pkgDetailsListB[key] || !reflect.DeepEqual(valA, pkgDetailsListB[key]) {
+			if len(changelog) != 0 {
 
-				finalComparison[key] = make(PackageDetailsMap)
-				finalComparison[key]["DB1"] = valA.(string)
-				finalComparison[key]["DB2"] = pkgDetailsListB[key].(string)
+				finalComparison[key] = changelog
+				// finalComparison[key]["DB1"] = valA.(string)
+				// finalComparison[key]["DB2"] = pkgDetailsListB[key].(string)
 				//fmt.Println("Differences found for Platform " + platformA + " key " + key)
 				//fmt.Printf("Value in DB1 %s ; Value in DB2 %s \n", valA.(string), pkgDetailsListB[key].(string))
 			}
@@ -185,10 +195,10 @@ func getNestedBuckets(parentBucket *bolt.Bucket, bucketName string) (det Details
 			pkgDetail.Pkg = bucketName
 			pkgDetail.CVEs = append(pkgDetail.CVEs, CVE{
 				CVEID:   string(key),
-				Details: string(value),
+				Details: value,
 			})
 			//cveMap[string(key)] = value
-			pkgDetailMap[nestedPlatform] = string(value)
+			pkgDetailMap[nestedPlatform] = value
 			//det.NestedBuckets = []string{bucketName}
 			//
 			//det.Details = value
